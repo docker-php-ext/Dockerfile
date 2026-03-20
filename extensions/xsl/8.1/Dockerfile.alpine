@@ -1,0 +1,12 @@
+FROM php:8.1-alpine
+
+RUN apk add --no-cache libxslt-dev
+
+RUN apk add $PHPIZE_DEPS
+COPY scripts/docker-php-ext-active /usr/local/bin/docker-php-ext-active
+RUN chmod +x /usr/local/bin/docker-php-ext-active
+
+ENV LDFLAGS="-Wl,-rpath,/opt/php/lib"
+
+RUN docker-php-ext-install xsl && \
+    docker-php-ext-active xsl

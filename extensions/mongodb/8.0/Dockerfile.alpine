@@ -1,0 +1,16 @@
+FROM php:8.0-alpine
+
+RUN apk add --no-cache \
+    $PHPIZE_DEPS \
+    openssl-dev \
+    && pecl channel-update pecl.php.net \
+    && pecl install mongodb-1.16.2 \
+    && docker-php-ext-enable mongodb
+
+COPY scripts/docker-php-ext-active /usr/local/bin/docker-php-ext-active
+RUN chmod +x /usr/local/bin/docker-php-ext-active
+
+ENV LDFLAGS="-Wl,-rpath,/opt/php/lib"
+
+RUN docker-php-ext-enable mongodb && \
+    docker-php-ext-active mongodb

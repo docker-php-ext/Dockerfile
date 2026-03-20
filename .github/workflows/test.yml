@@ -1,0 +1,102 @@
+name: Build and Test
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+    inputs:
+      extension:
+        description: 'Extension PHP (eg: bcmath)'
+        required: true
+        type: string
+      version:
+        description: 'PHP version (eg: 8.0)'
+        required: true
+        type: string
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-list.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: set-list
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            JSON_RESULT=$(echo "${{ inputs.version }}" | tr ',' '\n' | sed 's/[[:space:]]//g' | grep -v '^$' | jq -R -s -c --arg ext "${{ inputs.extension }}" 'split("\n") | map(select(length > 0)) | map({extension: $ext, version: .})')
+          else
+            # For PRs, compare against base branch; for pushes, compare against previous commit
+            BASE_REF="${{ github.base_ref }}"
+            if [ -z "$BASE_REF" ]; then
+              # Default to comparing with HEAD^ if no base_ref (e.g., direct push)
+              # Or could compare with origin/main
+              BASE_REF="origin/main"
+            else
+              BASE_REF="origin/$BASE_REF"
+            fi
+            
+            JSON_RESULT=$(git diff --name-only $BASE_REF HEAD | \
+              grep '^extensions/' | \
+              awk -F'/' '{print $2":"$3}' | \
+              sort | uniq | \
+              jq -R -s -c 'split("\n") | map(select(length > 0) | split(":")) | map({extension: .[0], version: .[1]})')
+          fi
+
+          if [ -z "$JSON_RESULT" ] || [ "$JSON_RESULT" == "[]" ]; then
+            echo "No changes detected in extensions."
+            echo "matrix=[]" >> $GITHUB_OUTPUT
+          else
+            echo "matrix=$JSON_RESULT" >> $GITHUB_OUTPUT
+          fi
+  build-and-test:
+    needs: detect
+    if: needs.detect.outputs.matrix != '[]' && needs.detect.outputs.matrix != ''
+    strategy:
+      matrix:
+        include: ${{ fromJson(needs.detect.outputs.matrix) }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: dockerphpext
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build extension image
+        run: |
+          docker build \
+            -t dockerphpext/${{ matrix.extension }}:php${{ matrix.version }}-alpine \
+            -f extensions/${{ matrix.extension }}/${{ matrix.version }}/Dockerfile.alpine .
+
+      - name: Run tests
+        run: |
+          make run-single-test extension=${{ matrix.extension }} php_version=${{ matrix.version }}
+
+      - name: Build and Push extension image
+        id: build-and-push
+        run: |
+          FULL_IMAGE_NAME="dockerphpext/${{ matrix.extension }}"
+          VARIANT="alpine"
+          
+          EXT_VERSION=$(docker run --rm "$FULL_IMAGE_NAME:php${{ matrix.version }}-alpine" php --ri ${{ matrix.extension }} \
+            | grep -i '${{ matrix.extension }} version =>' \
+            | awk '{print $NF}')
+          
+          if [ -n "$EXT_VERSION" ]; then
+            TAG="${EXT_VERSION}-php${{ matrix.version }}-${VARIANT}"
+            docker tag "$FULL_IMAGE_NAME:php${{ matrix.version }}-alpine" "$FULL_IMAGE_NAME:$TAG"
+            docker push "$FULL_IMAGE_NAME:$TAG"
+          fi
+
+          docker push "$FULL_IMAGE_NAME:php${{ matrix.version }}-alpine"

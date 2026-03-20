@@ -1,0 +1,13 @@
+FROM php:8.2-alpine
+
+RUN apk add --no-cache openssl-dev
+
+RUN apk add $PHPIZE_DEPS && pecl install mongodb
+
+COPY scripts/docker-php-ext-active /usr/local/bin/docker-php-ext-active
+RUN chmod +x /usr/local/bin/docker-php-ext-active
+
+ENV LDFLAGS="-Wl,-rpath,/opt/php/lib"
+
+RUN docker-php-ext-enable mongodb && \
+    docker-php-ext-active mongodb

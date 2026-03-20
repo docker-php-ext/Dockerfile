@@ -1,0 +1,11 @@
+FROM php:8.0-alpine
+
+ENV LDFLAGS="-Wl,-rpath,/opt/php/lib"
+
+RUN apk add --no-cache $PHPIZE_DEPS libzip-dev
+
+COPY scripts/docker-php-ext-active /usr/local/bin/docker-php-ext-active
+RUN chmod +x /usr/local/bin/docker-php-ext-active
+
+RUN docker-php-ext-install zip && \
+    docker-php-ext-active zip

@@ -1,0 +1,12 @@
+FROM php:8.3-alpine
+
+RUN apk add --no-cache $PHPIZE_DEPS libpng-dev libjpeg-turbo-dev freetype-dev libwebp-dev
+
+COPY scripts/docker-php-ext-active /usr/local/bin/docker-php-ext-active
+RUN chmod +x /usr/local/bin/docker-php-ext-active
+
+ENV LDFLAGS="-Wl,-rpath,/opt/php/lib"
+
+RUN docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp && \
+    docker-php-ext-install -j$(nproc) gd && \
+    docker-php-ext-active gd

@@ -1,0 +1,13 @@
+FROM php:8.0-alpine
+
+RUN apk add --no-cache $PHPIZE_DEPS  zlib-dev
+
+ENV LDFLAGS="-Wl,-rpath,/opt/php/lib"
+
+RUN pecl install memcache
+
+COPY scripts/docker-php-ext-active /usr/local/bin/docker-php-ext-active
+RUN chmod +x /usr/local/bin/docker-php-ext-active
+
+RUN docker-php-ext-enable memcache && \
+    docker-php-ext-active memcache

@@ -1,0 +1,11 @@
+FROM php:8.2-alpine
+
+ENV LDFLAGS="-Wl,-rpath,/opt/php/lib"
+
+RUN apk add --no-cache $PHPIZE_DEPS openldap-dev
+
+COPY scripts/docker-php-ext-active /usr/local/bin/docker-php-ext-active
+RUN chmod +x /usr/local/bin/docker-php-ext-active
+
+RUN docker-php-ext-install -j$(nproc) ldap && \
+    docker-php-ext-active ldap

@@ -1,0 +1,13 @@
+FROM php:8.5-alpine
+
+RUN apk add --no-cache $PHPIZE_DEPS linux-headers
+
+ENV LDFLAGS="-Wl,-rpath,/opt/php/lib"
+
+RUN pecl install xdebug
+
+COPY scripts/docker-php-ext-active /usr/local/bin/docker-php-ext-active
+RUN chmod +x /usr/local/bin/docker-php-ext-active
+
+RUN docker-php-ext-enable xdebug && \
+    docker-php-ext-active xdebug

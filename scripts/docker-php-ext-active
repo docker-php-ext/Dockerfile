@@ -1,0 +1,72 @@
+#!/bin/sh
+set -x
+
+extDir="$(php -d 'display_errors=stderr' -r 'echo ini_get("extension_dir");')"
+cd "$extDir"
+
+usage() {
+        echo "usage: $0 [options] module-name [module-name ...]"
+        echo "   ie: $0 gd mysqli"
+        echo "       $0 pdo pdo_mysql"
+        echo "       $0 --ini-name 0-apc.ini apcu apc"
+        echo
+        echo 'Possible values for module-name:'
+        find -maxdepth 1 \
+                        -type f \
+                        -name '*.so' \
+                        -exec basename '{}' ';' \
+                | sort \
+                | xargs
+        echo
+        echo 'Some of the above modules are already compiled into PHP; please check'
+        echo 'the output of "php -i" to see which modules are already loaded.'
+}
+
+modules=
+for module; do
+        if [ -z "$module" ]; then
+                continue
+        fi
+        if ! [ -f "$module" ] && ! [ -f "$module.so" ]; then
+                echo >&2 "error: '$module' does not exist"
+                echo >&2
+                usage >&2
+                exit 1
+        fi
+        modules="$modules $module"
+done
+
+if [ -z "$modules" ]; then
+        usage >&2
+        exit 1
+fi
+
+mkdir -p /opt/php/extensions/
+mkdir -p /opt/php/conf.d/
+mkdir -p /opt/php/lib/
+
+for module in $modules; do
+        EXTENSION_DIR=$(php -r "echo ini_get('extension_dir');") && cp -R "$EXTENSION_DIR"/$module.so /opt/php/extensions/$module.so
+        moduleFile="/opt/php/extensions/$module"
+        if [ -f "$module.so" ] && ! [ -f "$module" ]; then
+                moduleFile="/opt/php/extensions/$module.so"
+        fi
+        if readelf --wide --syms "$moduleFile" | grep -q ' zend_extension_entry$'; then
+                # https://wiki.php.net/internals/extensions#loading_zend_extensions
+                line="zend_extension=$moduleFile"
+        else
+                line="extension=$moduleFile"
+        fi
+
+        ext="$(basename "$module")"
+        
+        ini="/opt/php/conf.d/$ext.ini"
+        if ! grep -qFx -e "$line" -e "$line.so" "$ini" 2>/dev/null; then
+                echo "$line" >> "$ini"
+        fi
+        
+        # Copy related lib
+        ldd /usr/local/lib/php/extensions/*/$module.so \
+        | awk '{print $3}' | grep '/' \
+        | xargs -I '{}' cp -v '{}' /opt/php/lib/
+done

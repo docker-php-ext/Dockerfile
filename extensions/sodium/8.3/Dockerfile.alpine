@@ -1,0 +1,8 @@
+FROM php:8.3-alpine
+
+RUN apk add $PHPIZE_DEPS
+COPY scripts/docker-php-ext-active /usr/local/bin/docker-php-ext-active
+RUN chmod +x /usr/local/bin/docker-php-ext-active
+
+RUN docker-php-ext-enable sodium && \
+    docker-php-ext-active sodium
