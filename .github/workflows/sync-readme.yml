@@ -11,6 +11,7 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         extension: [bcmath, calendar, exif, gd, gettext, gmp, grpc, igbinary, imagick, imap, intl, ldap, memcache, memcached, mongodb, msgpack, mysqli, opcache, pcntl, pcov, pdo_mysql, pdo_pgsql, protobuf, redis, sockets, sodium, uuid, xdebug, xmlrpc, xsl, yaml, zip]
     steps:
