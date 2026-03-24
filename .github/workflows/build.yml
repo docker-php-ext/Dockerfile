@@ -33,13 +33,10 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
-        with:
-          platforms: linux/amd64,linux/arm64
 
       - name: Build extension image
         run: |
-          docker buildx build \
-            --platform linux/amd64,linux/arm64 \
+          docker build \
             -t dockerphpext/${{ matrix.extension }}:php${{ matrix.version }}-alpine \
             -f extensions/${{ matrix.extension }}/${{ matrix.version }}/Dockerfile.alpine .
 
