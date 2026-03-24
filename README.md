@@ -2,6 +2,8 @@
 
 This project provides pre-compiled PHP extension Docker images, designed to make installing PHP extensions fast and lightweight. 
 
+**GitHub Repository:** [https://github.com/dockerphpext/Dockerfile](https://github.com/dockerphpext/Dockerfile)
+
 By using these pre-compiled images, you can avoid long build times and heavy dependencies (like `build-base`, `autoconf`, `gcc`, etc.) in your final production images.
 
 ## 🚀 How it works
@@ -17,14 +19,16 @@ These artifacts are stored in `/opt/php/` within the extension image, allowing y
 
 To use an extension in your `Dockerfile`, simply copy the files from the corresponding extension image.
 
-### Example: Installing `gd` and `redis` for PHP 8.3
+### Example: Installing `gd` for PHP 8.3
 
 ```dockerfile
 FROM php:8.3-alpine
 
+# Enable PHP extensions
+ENV PHP_INI_SCAN_DIR=/opt/php/conf.d
+
 # Copy extensions and their dependencies from pre-compiled images
 COPY --from=dockerphpext/gd:php8.3-alpine /opt/php/ /opt/php/
-COPY --from=dockerphpext/redis:php8.3-alpine /opt/php/ /opt/php/
 ```
 
 *Note: Docker images are hosted on Docker Hub under the [dockerphpext](https://hub.docker.com/u/dockerphpext) user.*
