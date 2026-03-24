@@ -47,7 +47,7 @@ jobs:
         run: |
           make run-single-test extension=${{ matrix.extension }} php_version=${{ matrix.version }}
 
-      - name: Build and Push extension image
+      - name: Push extension image
         id: build-and-push
         run: |
           FULL_IMAGE_NAME="dockerphpext/${{ matrix.extension }}"
