@@ -2,7 +2,7 @@
 
 This project provides pre-compiled PHP extension Docker images, designed to make installing PHP extensions fast and lightweight. 
 
-**GitHub Repository:** [https://github.com/dockerphpext/Dockerfile](https://github.com/dockerphpext/Dockerfile)
+**GitHub Repository:** [https://github.com/docker-php-ext/Dockerfile](https://github.com/docker-php-ext/Dockerfile)
 
 By using these pre-compiled images, you can avoid long build times and heavy dependencies (like `build-base`, `autoconf`, `gcc`, etc.) in your final production images.
 
