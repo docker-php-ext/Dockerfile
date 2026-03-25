@@ -24,8 +24,8 @@ To use an extension in your `Dockerfile`, simply copy the files from the corresp
 ```dockerfile
 FROM php:8.3-alpine
 
-# Enable PHP extensions
-ENV PHP_INI_SCAN_DIR=/opt/php/conf.d
+# Enable PHP extensions, this is critical for the extension to work
+ENV PHP_INI_SCAN_DIR=/opt/php/conf.d:/usr/local/etc/php/conf.d
 
 # Copy extensions and their dependencies from pre-compiled images
 COPY --from=dockerphpext/gd:php8.3-alpine /opt/php/ /opt/php/
