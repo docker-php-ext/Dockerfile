@@ -1,8 +1,8 @@
 ARG PHP_VERSION
 ARG DISTRO
-ARG EXTENSION
+ARG BUILDER_IMAGE
 
-FROM ghcr.io/docker-php-ext/$EXTENSION:php$PHP_VERSION-$DISTRO as ext
+FROM ${BUILDER_IMAGE} AS ext
 FROM php:$PHP_VERSION-$DISTRO
 
 ENV PHP_INI_SCAN_DIR=/opt/php/conf.d:/usr/local/etc/php/conf.d
