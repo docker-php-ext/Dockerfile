@@ -59,6 +59,9 @@ jobs:
           fi
 
   build-and-test:
+    permissions:
+      contents: read
+      packages: write
     needs: detect
     if: needs.detect.outputs.matrix != '[]' && needs.detect.outputs.matrix != ''
     strategy:
