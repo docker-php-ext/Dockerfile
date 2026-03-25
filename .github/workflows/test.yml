@@ -76,6 +76,9 @@ jobs:
       TAG: php${{ matrix.version }}-alpine
 
     steps:
+      - name: Set short SHA
+        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -109,16 +112,16 @@ jobs:
             PHP_VERSION=${{ matrix.version }}
             EXTENSION=${{ matrix.extension }}
             DISTRO=alpine
-          tags: ${{ env.GHCR_IMAGE }}:${{ env.TAG }}
+          tags: ${{ env.GHCR_IMAGE }}:${{ env.TAG }}-${{ env.SHORT_SHA }}
 
       - name: Run tests against GHCR image
         run: |
           docker run --rm \
             -v $(pwd)/tests/test.php:/opt/php/tests/test.php \
-            ${{ env.GHCR_IMAGE }}:${{ env.TAG }} \
+            ${{ env.GHCR_IMAGE }}:${{ env.TAG }}-${{ env.SHORT_SHA }} \
             php /opt/php/tests/test.php ${{ matrix.extension }}
           
-          if docker run --rm ${{ env.GHCR_IMAGE }}:${{ env.TAG }} \
+          if docker run --rm ${{ env.GHCR_IMAGE }}:${{ env.TAG }}-${{ env.SHORT_SHA }} \
             php -m 2>&1 | grep -Eqi 'Unable|Warning'; then
             echo "❌ PHP extension load failed"
             exit 1
