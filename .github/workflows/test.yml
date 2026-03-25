@@ -7,12 +7,12 @@ on:
     branches: ["main"]
   workflow_dispatch:
     inputs:
-      extension:
-        description: 'Extension PHP (eg: bcmath)'
+      extensions:
+        description: 'PHP extensions, comma-separated (eg: bcmath,intl,redis)'
         required: true
         type: string
-      version:
-        description: 'PHP version (eg: 8.0)'
+      versions:
+        description: 'PHP versions, comma-separated (eg: 8.1,8.2,8.3)'
         required: true
         type: string
 
@@ -25,21 +25,26 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
       - id: set-list
         run: |
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            JSON_RESULT=$(echo "${{ inputs.version }}" | tr ',' '\n' | sed 's/[[:space:]]//g' | grep -v '^$' | jq -R -s -c --arg ext "${{ inputs.extension }}" 'split("\n") | map(select(length > 0)) | map({extension: $ext, version: .})')
+            # Parse comma-separated extensions and versions, generate cross-product matrix
+            JSON_RESULT=$(python3 -c "
+              import json, itertools
+              exts = [e.strip() for e in '${{ inputs.extensions }}'.split(',') if e.strip()]
+              vers = [v.strip() for v in '${{ inputs.versions }}'.split(',') if v.strip()]
+              matrix = [{'extension': e, 'version': v} for e, v in itertools.product(exts, vers)]
+              print(json.dumps(matrix))
+            ")
           else
-            # For PRs, compare against base branch; for pushes, compare against previous commit
             BASE_REF="${{ github.base_ref }}"
             if [ -z "$BASE_REF" ]; then
-              # Default to comparing with HEAD^ if no base_ref (e.g., direct push)
-              # Or could compare with origin/main
               BASE_REF="origin/main"
             else
               BASE_REF="origin/$BASE_REF"
             fi
-            
+
             JSON_RESULT=$(git diff --name-only $BASE_REF HEAD | \
               grep '^extensions/' | \
               awk -F'/' '{print $2":"$3}' | \
@@ -53,39 +58,61 @@ jobs:
           else
             echo "matrix=$JSON_RESULT" >> $GITHUB_OUTPUT
           fi
+
   build-and-test:
     needs: detect
     if: needs.detect.outputs.matrix != '[]' && needs.detect.outputs.matrix != ''
     strategy:
+      fail-fast: false
       matrix:
         include: ${{ fromJson(needs.detect.outputs.matrix) }}
     runs-on: ubuntu-latest
+
+    env:
+      GHCR_IMAGE: ghcr.io/${{ github.repository_owner }}/${{ matrix.extension }}
+      DH_IMAGE: dockerphpext/${{ matrix.extension }}
+      TAG: php${{ matrix.version }}-alpine
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@v3
 
-      - name: Build extension image
-        run: |
-          docker build \
-            -t dockerphpext/${{ matrix.extension }}:php${{ matrix.version }}-alpine \
-            -f extensions/${{ matrix.extension }}/${{ matrix.version }}/Dockerfile.alpine .
-
-      - name: Run tests
-        run: |
-          make run-single-test extension=${{ matrix.extension }} php_version=${{ matrix.version }}
-
-      - name: Log in to Docker Hub
+      - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
-          username: dockerphpext
-          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Push extension image
-        id: build-and-push
+      - name: Build Extension Builder
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: extensions/${{ matrix.extension }}/${{ matrix.version }}/Dockerfile.alpine
+          load: true
+          tags: ${{ env.GHCR_IMAGE }}:${{ env.TAG }}
+          cache-from: type=registry,ref=${{ env.GHCR_IMAGE }}:cache-${{ env.TAG }}
+          cache-to: type=registry,ref=${{ env.GHCR_IMAGE }}:cache-${{ env.TAG }},mode=max
+                      
+      - name: Build Extension
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: extensions/${{ matrix.extension }}/Dockerfile
+          push: true
+          build-args: 
+            PHP_VERSION=${{ matrix.version }}
+            EXTENSION=${{ matrix.extension }}
+            DISTRO=alpine
+          tags: ${{ env.GHCR_IMAGE }}:${{ env.TAG }}
+          cache-from: type=registry,ref=${{ env.GHCR_IMAGE }}:cache-${{ env.TAG }}
+          cache-to: type=registry,ref=${{ env.GHCR_IMAGE }}:cache-${{ env.TAG }},mode=max
+
+      - name: Run tests against GHCR image
         run: |
-          FULL_IMAGE_NAME="dockerphpext/${{ matrix.extension }}"
-          TAG="php${{ matrix.version }}-alpine"
-          docker push "$FULL_IMAGE_NAME:$TAG"
+          make run-single-test \
+            extension=${{ matrix.extension }} \
+            php_version=${{ matrix.version }}

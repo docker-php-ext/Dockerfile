@@ -1,34 +1,61 @@
-name: Build and Release to Docker Hub
+name: Release to Docker Hub
 
 on:
   release:
     types: [published]
-  workflow_dispatch:
 
 jobs:
-  build-and-push:
+  detect:
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-list.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: set-list
+        run: |
+          # On release, publish everything under extensions/
+          JSON_RESULT=$(find extensions -name 'Dockerfile.alpine' | \
+            awk -F'/' '{print $2":"$3}' | \
+            sort | uniq | \
+            jq -R -s -c 'split("\n") | map(select(length > 0) | split(":")) | map({extension: .[0], version: .[1]})')
+
+          if [ -z "$JSON_RESULT" ] || [ "$JSON_RESULT" == "[]" ]; then
+            echo "No extensions found."
+            echo "matrix=[]" >> $GITHUB_OUTPUT
+          else
+            echo "matrix=$JSON_RESULT" >> $GITHUB_OUTPUT
+          fi
+
+  release:
+    needs: detect
+    if: needs.detect.outputs.matrix != '[]' && needs.detect.outputs.matrix != ''
     strategy:
       fail-fast: false
       matrix:
-        extension: [bcmath, calendar, exif, gd, gettext, gmp, grpc, igbinary, imagick, imap, intl, ldap, memcache, memcached, mongodb, msgpack, mysqli, opcache, pcntl, pcov, pdo_mysql, pdo_pgsql, protobuf, redis, sockets, sodium, uuid, xdebug, xmlrpc, xsl, yaml, zip]
-        version: ["8.0", "8.1", "8.2", "8.3", "8.4", "8.5"]
-        exclude:
-          - extension: opcache
-            version: "8.5"
-          - extension: imap
-            version: "8.4"
-          - extension: imap
-            version: "8.5"
-          - extension: memcache
-            version: "8.5"
+        include: ${{ fromJson(needs.detect.outputs.matrix) }}
+    runs-on: ubuntu-latest
+
+    env:
+      GHCR_IMAGE: ghcr.io/${{ github.repository_owner }}/${{ matrix.extension }}
+      DH_IMAGE: dockerphpext/${{ matrix.extension }}
+      TAG: php${{ matrix.version }}-alpine
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
@@ -36,17 +63,18 @@ jobs:
           username: dockerphpext
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
-      - name: Build extension image
+      - name: Verify GHCR image exists
+        id: check
         run: |
-          docker build \
-            -t dockerphpext/${{ matrix.extension }}:php${{ matrix.version }}-alpine \
-            -f extensions/${{ matrix.extension }}/${{ matrix.version }}/Dockerfile.alpine \
-            .
+          docker manifest inspect "${{ env.GHCR_IMAGE }}:${{ env.TAG }}" \
+            && echo "exists=true" >> $GITHUB_OUTPUT \
+            || echo "exists=false" >> $GITHUB_OUTPUT
 
-      - name: Run tests
+      # Image already built & tested in CI — just promote it, no rebuild
+      - name: Promote GHCR image to Docker Hub
+        if: steps.check.outputs.exists == 'true'
         run: |
-          make run-single-test extension=${{ matrix.extension }} php_version=${{ matrix.version }}
-
-      - name: Push to Docker Hub
-        run: |
-          docker push dockerphpext/${{ matrix.extension }}:php${{ matrix.version }}-alpine
+          docker buildx imagetools create \
+            --tag "${{ env.DH_IMAGE }}:${{ env.TAG }}" \
+            --tag "${{ env.DH_IMAGE }}:${{ github.ref_name }}-${{ env.TAG }}" \
+            "${{ env.GHCR_IMAGE }}:${{ env.TAG }}"

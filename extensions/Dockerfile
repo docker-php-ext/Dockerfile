@@ -5,8 +5,6 @@ ARG EXTENSION
 FROM dockerphpext/$EXTENSION:php$PHP_VERSION-$DISTRO as ext
 FROM php:$PHP_VERSION-$DISTRO
 
-ENV PHP_INI_SCAN_DIR=/opt/php/conf.d
+ENV PHP_INI_SCAN_DIR=/opt/php/conf.d:/usr/local/etc/php/conf.d
 
 COPY --from=ext /opt/php /opt/php
-
-COPY test.php /opt/php/tests/test.php

@@ -31,14 +31,8 @@ run-single-test:
 	echo "###############################################"; \
 	echo "### Testing $(extension) PHP $$php_version"; \
 	echo "###"; \
-	docker build \
-		-f tests/Dockerfile \
-		--build-arg DISTRO=alpine \
-		--build-arg PHP_VERSION=$$php_version \
-		--build-arg EXTENSION=$(extension) \
-		-t test-$(extension)-$$php_version \
-		tests; \
 	docker run --rm \
+	    -v $$(pwd)/test.php /opt/php/tests/test.php \
 		test-$(extension)-$$php_version \
 		php /opt/php/tests/test.php $(extension); \
 	if docker run --rm test-$(extension)-$$php_version php -v 2>&1 | grep -Eqi 'Unable|Warning'; then \
