@@ -37,7 +37,7 @@ COPY --from=dockerphpext/gd:php8.3-alpine /opt/php/ /opt/php/
 
 Currently, we support the following extensions for PHP versions **8.0, 8.1, 8.2, 8.3, 8.4, and 8.5**:
 
-- `bcmath`, `calendar`, `exif`, `gd`, `gettext`, `gmp`, `grpc`, `igbinary`, `imagick`, `imap`, `intl`, `ldap`, `memcache`, `memcached`, `mongodb`, `msgpack`, `mysqli`, `opcache`, `pcntl`, `pcov`, `pdo_mysql`, `pdo_pgsql`, `protobuf`, `redis`, `sockets`, `sodium`, `uuid`, `xdebug`, `xmlrpc`, `xsl`, `yaml`, `zip`
+- `bcmath`, `calendar`, `exif`, `gd`, `gettext`, `gmp`, `grpc`, `igbinary`, `imagick`, `imap`, `intl`, `ldap`, `memcache`, `memcached`, `mongodb`, `msgpack`, `mysqli`, `opcache`, `pcntl`, `pcov`, `pdo_mysql`, `pdo_pgsql`, `protobuf`, `redis`, `sockets`, `uuid`, `xdebug`, `xmlrpc`, `xsl`, `yaml`, `zip`
 
 *(Check the `extensions/` directory for the most up-to-date list.)*
 
