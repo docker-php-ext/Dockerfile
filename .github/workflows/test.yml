@@ -54,7 +54,15 @@ jobs:
             echo "No changes detected in extensions."
             echo "matrix=[]" >> $GITHUB_OUTPUT
           else
-            echo "matrix=$JSON_RESULT" >> $GITHUB_OUTPUT
+            # Filter matrix by Dockerfile existence
+            FILTERED=$(echo "$JSON_RESULT" | jq -c '.[]' | while read -r entry; do
+              EXT=$(echo "$entry" | jq -r '.extension')
+              VER=$(echo "$entry" | jq -r '.version')
+              if [ -f "extensions/$EXT/$VER/Dockerfile.alpine" ]; then
+                echo "$entry"
+              fi
+            done | jq -sc '.')
+            echo "matrix=${FILTERED}" >> $GITHUB_OUTPUT
           fi
 
   build-and-test:
