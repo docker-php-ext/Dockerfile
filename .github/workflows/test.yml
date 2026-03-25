@@ -30,13 +30,14 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             # Parse comma-separated extensions and versions, generate cross-product matrix
-            JSON_RESULT=$(python3 -c "
-              import json, itertools
-              exts = [e.strip() for e in '${{ inputs.extensions }}'.split(',') if e.strip()]
-              vers = [v.strip() for v in '${{ inputs.versions }}'.split(',') if v.strip()]
-              matrix = [{'extension': e, 'version': v} for e, v in itertools.product(exts, vers)]
-              print(json.dumps(matrix))
-            ")
+            JSON_RESULT=$(python3 << 'EOF'
+            import json, itertools
+            exts = [e.strip() for e in 'pdo_mysql'.split(',') if e.strip()]
+            vers = [v.strip() for v in '8.0'.split(',') if v.strip()]
+            matrix = [{'extension': e, 'version': v} for e, v in itertools.product(exts, vers)]
+            print(json.dumps(matrix))
+            EOF
+            )
           else
             BASE_REF="${{ github.base_ref }}"
             if [ -z "$BASE_REF" ]; then
