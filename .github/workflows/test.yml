@@ -108,6 +108,15 @@ jobs:
 
       - name: Run tests against GHCR image
         run: |
-          make run-single-test \
-            extension=${{ matrix.extension }} \
-            php_version=${{ matrix.version }}
+          docker run --rm \
+            -v $(pwd)/tests/test.php:/opt/php/tests/test.php \
+            ${{ env.GHCR_IMAGE }}:${{ env.TAG }} \
+            php /opt/php/tests/test.php ${{ matrix.extension }}
+          
+          if docker run --rm ${{ env.GHCR_IMAGE }}:${{ env.TAG }} \
+            php -m 2>&1 | grep -Eqi 'Unable|Warning'; then
+            echo "❌ PHP extension load failed"
+            exit 1
+          fi
+          
+          echo "✅ Extension ${{ matrix.extension }} loaded successfully"
