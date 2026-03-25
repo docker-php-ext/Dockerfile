@@ -98,7 +98,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: extensions/${{ matrix.extension }}/Dockerfile
+          file: extensions//Dockerfile
           push: true
           build-args: 
             PHP_VERSION=${{ matrix.version }}
