@@ -100,7 +100,7 @@ jobs:
           context: .
           file: extensions//Dockerfile
           push: true
-          build-args: 
+          build-args: |
             PHP_VERSION=${{ matrix.version }}
             EXTENSION=${{ matrix.extension }}
             DISTRO=alpine
