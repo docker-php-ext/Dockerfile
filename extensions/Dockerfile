@@ -2,7 +2,7 @@ ARG PHP_VERSION
 ARG DISTRO
 ARG EXTENSION
 
-FROM dockerphpext/$EXTENSION:php$PHP_VERSION-$DISTRO as ext
+FROM ghcr.io/docker-php-ext/$EXTENSION:php$PHP_VERSION-$DISTRO as ext
 FROM php:$PHP_VERSION-$DISTRO
 
 ENV PHP_INI_SCAN_DIR=/opt/php/conf.d:/usr/local/etc/php/conf.d
