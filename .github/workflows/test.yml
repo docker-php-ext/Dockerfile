@@ -104,7 +104,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: extensions/${{ matrix.extension }}/Dockerfile
+          file: extensions/Dockerfile
           push: true
           platforms: linux/amd64,linux/arm64
           build-args: |
