@@ -19,6 +19,9 @@ on:
 jobs:
   detect:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     outputs:
       matrix: ${{ steps.set-list.outputs.matrix }}
     steps:
