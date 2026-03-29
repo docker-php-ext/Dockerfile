@@ -54,7 +54,6 @@ jobs:
             echo "No changes detected in extensions."
             echo "matrix=[]" >> $GITHUB_OUTPUT
           else
-            # Filter matrix by Dockerfile existence
             FILTERED=$(echo "$JSON_RESULT" | jq -c '.[]' | while read -r entry; do
               EXT=$(echo "$entry" | jq -r '.extension')
               VER=$(echo "$entry" | jq -r '.version')
@@ -65,7 +64,7 @@ jobs:
             echo "matrix=${FILTERED}" >> $GITHUB_OUTPUT
           fi
 
-  build-and-test:
+  build-platform:
     permissions:
       contents: read
       packages: write
@@ -75,11 +74,11 @@ jobs:
       fail-fast: false
       matrix:
         include: ${{ fromJson(needs.detect.outputs.matrix) }}
-    runs-on: ubuntu-latest
+        platform: [amd64, arm64]
+    runs-on: ${{ matrix.platform == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
 
     env:
       GHCR_IMAGE: ghcr.io/${{ github.repository_owner }}/${{ matrix.extension }}
-      DH_IMAGE: dockerphpext/${{ matrix.extension }}
       TAG: php${{ matrix.version }}-alpine
 
     steps:
@@ -87,10 +86,7 @@ jobs:
         run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
 
       - name: Checkout repository
-        uses: actions/checkout@v4
-        
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
+        uses: actions/checkout@v6
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -108,8 +104,8 @@ jobs:
           context: .
           file: extensions/${{ matrix.extension }}/${{ matrix.version }}/Dockerfile.alpine
           push: true
-          platforms: linux/amd64,linux/arm64
-          tags: ${{ env.GHCR_IMAGE }}:builder-${{ env.TAG }}-${{ env.SHORT_SHA }}
+          platforms: linux/${{ matrix.platform }}
+          tags: ${{ env.GHCR_IMAGE }}:builder-${{ env.TAG }}-${{ env.SHORT_SHA }}-${{ matrix.platform }}
 
       - name: Build Extension
         uses: docker/build-push-action@v6
@@ -117,24 +113,58 @@ jobs:
           context: .
           file: extensions/Dockerfile
           push: true
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/${{ matrix.platform }}
           build-args: |
             PHP_VERSION=${{ matrix.version }}
             DISTRO=alpine
-            BUILDER_IMAGE=${{ env.GHCR_IMAGE }}:builder-${{ env.TAG }}-${{ env.SHORT_SHA }}
-          tags: ${{ env.GHCR_IMAGE }}:${{ env.TAG }}-${{ env.SHORT_SHA }}
+            BUILDER_IMAGE=${{ env.GHCR_IMAGE }}:builder-${{ env.TAG }}-${{ env.SHORT_SHA }}-${{ matrix.platform }}
+          tags: ${{ env.GHCR_IMAGE }}:${{ env.TAG }}-${{ env.SHORT_SHA }}-${{ matrix.platform }}
 
-      - name: Run tests against GHCR image
+      - name: Run tests
         run: |
           docker run --rm \
             -v $(pwd)/tests/test.php:/opt/php/tests/test.php \
-            ${{ env.GHCR_IMAGE }}:${{ env.TAG }}-${{ env.SHORT_SHA }} \
+            ${{ env.GHCR_IMAGE }}:${{ env.TAG }}-${{ env.SHORT_SHA }}-${{ matrix.platform }} \
             php /opt/php/tests/test.php ${{ matrix.extension }}
 
-          if docker run --rm ${{ env.GHCR_IMAGE }}:${{ env.TAG }}-${{ env.SHORT_SHA }} \
+          if docker run --rm ${{ env.GHCR_IMAGE }}:${{ env.TAG }}-${{ env.SHORT_SHA }}-${{ matrix.platform }} \
             php -m 2>&1 | grep -Eqi 'Unable|Warning'; then
             echo "❌ PHP extension load failed"
             exit 1
           fi
 
-          echo "✅ Extension ${{ matrix.extension }} loaded successfully"
+          echo "✅ Extension ${{ matrix.extension }} loaded successfully on ${{ matrix.platform }}"
+
+  merge-manifest:
+    permissions:
+      contents: read
+      packages: write
+    needs: [detect, build-platform]
+    if: needs.detect.outputs.matrix != '[]' && needs.detect.outputs.matrix != ''
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.detect.outputs.matrix) }}
+    runs-on: ubuntu-latest
+
+    env:
+      GHCR_IMAGE: ghcr.io/${{ github.repository_owner }}/${{ matrix.extension }}
+      TAG: php${{ matrix.version }}-alpine
+
+    steps:
+      - name: Set short SHA
+        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create and push multi-arch manifest
+        run: |
+          docker buildx imagetools create \
+            --tag ${{ env.GHCR_IMAGE }}:${{ env.TAG }}-${{ env.SHORT_SHA }} \
+            ${{ env.GHCR_IMAGE }}:${{ env.TAG }}-${{ env.SHORT_SHA }}-amd64 \
+            ${{ env.GHCR_IMAGE }}:${{ env.TAG }}-${{ env.SHORT_SHA }}-arm64
