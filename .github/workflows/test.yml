@@ -24,6 +24,7 @@ jobs:
       packages: write
     outputs:
       matrix: ${{ steps.set-list.outputs.matrix }}
+      matrix_base: ${{ steps.set-list.outputs.matrix_base }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -53,6 +54,7 @@ jobs:
           if [ -z "$JSON_RESULT" ] || [ "$JSON_RESULT" == "[]" ]; then
             echo "No changes detected in extensions."
             echo "matrix=[]" >> $GITHUB_OUTPUT
+            echo "matrix_base=[]" >> $GITHUB_OUTPUT
           else
             FILTERED=$(echo "$JSON_RESULT" | jq -c '.[]' | while read -r entry; do
               EXT=$(echo "$entry" | jq -r '.extension')
@@ -61,7 +63,11 @@ jobs:
                 echo "$entry"
               fi
             done | jq -sc '.')
-            echo "matrix=${FILTERED}" >> $GITHUB_OUTPUT
+
+            MATRIX=$(echo "$FILTERED" | jq -c '[.[] | . as $e | ["amd64","arm64"] | .[] | {extension: $e.extension, version: $e.version, platform: .}]')
+
+            echo "matrix=${MATRIX}" >> $GITHUB_OUTPUT
+            echo "matrix_base=${FILTERED}" >> $GITHUB_OUTPUT
           fi
 
   build-platform:
@@ -74,7 +80,6 @@ jobs:
       fail-fast: false
       matrix:
         include: ${{ fromJson(needs.detect.outputs.matrix) }}
-        platform: [amd64, arm64]
     runs-on: ${{ matrix.platform == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
 
     env:
@@ -140,11 +145,11 @@ jobs:
       contents: read
       packages: write
     needs: [detect, build-platform]
-    if: needs.detect.outputs.matrix != '[]' && needs.detect.outputs.matrix != ''
+    if: needs.detect.outputs.matrix_base != '[]' && needs.detect.outputs.matrix_base != ''
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJson(needs.detect.outputs.matrix) }}
+        include: ${{ fromJson(needs.detect.outputs.matrix_base) }}
     runs-on: ubuntu-latest
 
     env:
