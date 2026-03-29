@@ -13,17 +13,11 @@ on:
         description: 'PHP versions, comma-separated (eg: 8.1,8.2,8.3)'
         required: true
         type: string
-      sha:
-        description: 'SHA of the release'
-        required: true
-        type: string
-
 jobs:
   detect:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-list.outputs.matrix }}
-      sha: ${{ steps.short-sha.outputs.sha }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -50,15 +44,6 @@ jobs:
           else
             echo "matrix=$JSON_RESULT" >> $GITHUB_OUTPUT
           fi
-      
-      - id: short-sha
-        run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            SHA="${{ inputs.sha }}"
-          else
-            SHA="${GITHUB_SHA}"
-          fi
-          echo "sha=${SHA::7}" >> $GITHUB_OUTPUT
   release:
     needs: detect
     if: needs.detect.outputs.matrix != '[]' && needs.detect.outputs.matrix != ''
@@ -99,7 +84,7 @@ jobs:
       - name: Verify GHCR image exists
         id: check
         run: |
-          docker manifest inspect "${{ env.GHCR_IMAGE }}:${{ env.TAG }}-${{ needs.detect.outputs.sha }}" \
+          docker manifest inspect "${{ env.GHCR_IMAGE }}:${{ env.TAG }}-latest" \
             && echo "exists=true" >> $GITHUB_OUTPUT \
             || echo "exists=false" >> $GITHUB_OUTPUT
 
@@ -109,4 +94,4 @@ jobs:
         run: |
           docker buildx imagetools create \
             --tag "${{ env.DH_IMAGE }}:${{ env.TAG }}" \
-            "${{ env.GHCR_IMAGE }}:${{ env.TAG }}-${{ needs.detect.outputs.sha }}"
+            "${{ env.GHCR_IMAGE }}:${{ env.TAG }}-latest"

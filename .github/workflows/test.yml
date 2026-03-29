@@ -185,5 +185,6 @@ jobs:
         run: |
           docker buildx imagetools create \
             --tag ${{ env.GHCR_IMAGE }}:${{ env.TAG }}-${{ env.SHORT_SHA }} \
+            --tag ${{ env.GHCR_IMAGE }}:${{ env.TAG }}-latest \
             ${{ env.GHCR_IMAGE }}:${{ env.TAG }}-${{ env.SHORT_SHA }}-amd64 \
             ${{ env.GHCR_IMAGE }}:${{ env.TAG }}-${{ env.SHORT_SHA }}-arm64
