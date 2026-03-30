@@ -7,49 +7,46 @@
 .PHONY: build
 
 build:
-	@if [ -z "$(extension)" ]; then echo "Error: extension is not set. Use: make build extension=<extension> version=<version>"; exit 1; fi
-	@if [ -z "$(php_version)" ]; then echo "Error: version is not set. Use: make build extension=<extension> version=<version>"; exit 1; fi
+	@if [ -z "$(extension)" ]; then echo "Error: extension is not set. Use: make build extension=<extension> php_version=<version>"; exit 1; fi
+	@if [ -z "$(php_version)" ]; then echo "Error: php_version is not set. Use: make build extension=<extension> php_version=<version>"; exit 1; fi
 	@if [ ! -f extensions/$(extension)/$(php_version)/Dockerfile.alpine ]; then echo "Error: Dockerfile extensions/$(extension)/$(php_version)/Dockerfile.alpine not found."; exit 1; fi
+	@BUILDER_IMAGE=dockerphpext-local/builder-$(extension)-$(php_version); \
+	TEST_IMAGE=test-dockerphpext-local/$(extension)-$(php_version); \
+	FINAL_IMAGE=dockerphpext-local/$(extension)-$(php_version); \
 	docker build \
-		-t dockerphpext/$(extension)-$(php_version) \
+		-t $$BUILDER_IMAGE \
 		-f extensions/$(extension)/$(php_version)/Dockerfile.alpine \
+		. && \
+	docker build \
+		-t $$TEST_IMAGE \
+		--target test \
+		--build-arg PHP_VERSION=$(php_version) \
+		--build-arg DISTRO=alpine \
+		--build-arg BUILDER_IMAGE=$$BUILDER_IMAGE \
+		-f extensions/Dockerfile \
+		. && \
+	docker build \
+		-t $$FINAL_IMAGE \
+		--build-arg PHP_VERSION=$(php_version) \
+		--build-arg DISTRO=alpine \
+		--build-arg BUILDER_IMAGE=$$BUILDER_IMAGE \
+		-f extensions/Dockerfile \
 		.
-	@EXT_VERSION=$$(docker run --rm dockerphpext/$(extension)-$(php_version) php --ri $(extension) | grep '$(extension) version =>' | awk '{print $$NF}'); \
-	if [ -n "$$EXT_VERSION" ]; then \
-		echo "Detected $(extension) version: $$EXT_VERSION"; \
-		docker tag dockerphpext/$(extension)-$(php_version) dockerphpext/$(extension):$$EXT_VERSION-php$(php_version)-alpine; \
-		echo "Tagged: dockerphpext/$(extension):php$(php_version)-alpine-$$EXT_VERSION"; \
-	fi
 
-act-build:
-	act -P ubuntu-latest=catthehacker/ubuntu:act-22.04 --workflows .github/workflows/build.yml --container-daemon-socket /var/run/docker.sock --matrix version:$(version) --matrix extension:$(extension); \
-
-run-single-test:
-	set -e; \
-	echo "PHP_VERSION=$$php_version"; \
+run-single-test: build
+	@set -e; \
+	TEST_IMAGE=test-dockerphpext-local/$(extension)-$(php_version); \
 	echo "###############################################"; \
-	echo "###############################################"; \
-	echo "### Testing $(extension) PHP $$php_version"; \
+	echo "### Testing $(extension) PHP $(php_version)"; \
 	echo "###"; \
 	docker run --rm \
-	    -v $$(pwd)/test.php /opt/php/tests/test.php \
-		test-$(extension)-$$php_version \
+		-v $$(pwd)/tests/test.php:/opt/php/tests/test.php \
+		$$TEST_IMAGE \
 		php /opt/php/tests/test.php $(extension); \
-	if docker run --rm test-$(extension)-$$php_version php -v 2>&1 | grep -Eqi 'Unable|Warning'; then \
+	if docker run --rm $$TEST_IMAGE php -m 2>&1 | grep -Eqi 'Unable|Warning'; then \
 		echo "❌ PHP extension load failed"; \
 		exit 1; \
 	fi; \
 	echo ""; \
-	echo "✅ Test passed"; \
-	echo ""; \
-
-run-test:
-	@if [ "$(extension)" != "*" ]; then \
-		[ -d "extensions/$(extension)" ] || { echo "Extension not found"; exit 1; }; \
-	fi; \
-	set -euo pipefail; \
-	for path in extensions/$(extension)/*/; do \
-		[ -d "$$path" ] || continue; \
-		php_version=$$(basename "$$path"); \
-		$(MAKE) run-single-test extension=$(extension) php_version=$$php_version; \
-	done
+	echo "✅ Test passed for $(extension) PHP $(php_version)"; \
+	echo ""
