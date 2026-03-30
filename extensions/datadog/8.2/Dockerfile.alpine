@@ -1,0 +1,23 @@
+FROM php:8.2-alpine
+
+RUN apk add $PHPIZE_DEPS patchelf
+COPY scripts/docker-php-ext-active /usr/local/bin/docker-php-ext-active
+RUN chmod +x /usr/local/bin/docker-php-ext-active
+
+ENV DDTRACE_BUILD_DIR=/opt/ddtrace
+
+RUN set -xe; \
+    mkdir -p ${DDTRACE_BUILD_DIR}; \
+    curl -Ls -o ${DDTRACE_BUILD_DIR}/datadog-setup.php \
+      https://github.com/DataDog/dd-trace-php/releases/download/1.16.0/datadog-setup.php 
+
+WORKDIR ${DDTRACE_BUILD_DIR}
+
+RUN php datadog-setup.php --php-bin=all --enable-profiling
+
+RUN docker-php-ext-active ddtrace \
+    && docker-php-ext-active datadog-profiling \
+    && docker-php-ext-active ddappsec \
+    && patchelf --set-rpath '/opt/php/lib' /opt/php/extensions/ddtrace.so \
+    && patchelf --set-rpath '/opt/php/lib' /opt/php/extensions/datadog-profiling.so \
+    && patchelf --set-rpath '/opt/php/lib' /opt/php/extensions/ddappsec.so
