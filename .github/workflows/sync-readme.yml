@@ -1,19 +1,61 @@
 name: Sync README to Docker Hub
 
 on:
+  release:
+    types: [ published ]
   push:
     branches: [ "main" ]
     paths:
       - "README.md"
   workflow_dispatch:
+    inputs:
+      extensions:
+        description: 'PHP extensions, comma-separated (eg: bcmath,intl,redis)'
+        required: true
+        type: string
+      versions:
+        description: 'PHP versions, comma-separated (eg: 8.1,8.2,8.3)'
+        required: true
+        type: string
 
 jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-list.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - id: set-list
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            # Parse comma-separated extensions and versions, generate cross-product matrix
+            JSON_RESULT=$(python3 .github/scripts/generate-matrix.py \
+              "${{ inputs.extensions }}" \
+              "${{ inputs.versions }}")
+          else
+            # On release, publish everything under extensions/
+            JSON_RESULT=$(find extensions -name 'Dockerfile.alpine' | \
+              awk -F'/' '{print $2":"$3}' | \
+              sort | uniq | \
+              jq -R -s -c 'split("\n") | map(select(length > 0) | split(":")) | map({extension: .[0], version: .[1]})')
+          fi
+
+          if [ -z "$JSON_RESULT" ] || [ "$JSON_RESULT" == "[]" ]; then
+            echo "No extensions found."
+            echo "matrix=[]" >> $GITHUB_OUTPUT
+          else
+            echo "matrix=$JSON_RESULT" >> $GITHUB_OUTPUT
+          fi
   sync:
     runs-on: ubuntu-latest
+    if: needs.detect.outputs.matrix != '[]' && needs.detect.outputs.matrix != ''
     strategy:
       fail-fast: false
       matrix:
-        extension: [bcmath, calendar, exif, gd, gettext, gmp, grpc, igbinary, imagick, imap, intl, ldap, memcache, memcached, mongodb, msgpack, mysqli, opcache, pcntl, pcov, pdo_mysql, pdo_pgsql, protobuf, redis, sockets, uuid, xdebug, xmlrpc, xsl, yaml, zip]
+        include: ${{ fromJson(needs.detect.outputs.matrix) }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
