@@ -142,7 +142,7 @@ jobs:
       - name: Run tests
         run: |
           docker run --rm \
-            -v $(pwd)/tests/test.php:/opt/php/tests/test.php \
+            -v $(pwd)/test.php:/opt/php/tests/test.php \
             test-${{ env.GHCR_IMAGE }}:${{ env.TAG }}-${{ env.SHORT_SHA }}-${{ matrix.platform }} \
             php /opt/php/tests/test.php ${{ matrix.extension }}
 

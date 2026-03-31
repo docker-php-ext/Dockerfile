@@ -1,0 +1,24 @@
+FROM php:8.0-alpine
+
+ENV ELASTIC_APM_VERSION=1.16.0
+ENV ELASTIC_APM_BUILD_DIR=/tmp/elastic-apm
+ENV PHP_INI_SCAN_DIR=/opt/php/conf.d
+
+RUN set -xe \
+    && ARCH=$(uname -m) \
+    && mkdir -p ${ELASTIC_APM_BUILD_DIR} \
+    && curl -Ls -o ${ELASTIC_APM_BUILD_DIR}/elastic-apm.apk \
+        https://github.com/elastic/apm-agent-php/releases/download/v${ELASTIC_APM_VERSION}/apm-agent-php_${ELASTIC_APM_VERSION}_${ARCH}.apk \
+    && apk add --allow-untrusted ${ELASTIC_APM_BUILD_DIR}/elastic-apm.apk \
+    && set -xe \
+    && mkdir -p /opt/php/apm-agent-php/ \
+    && mkdir -p /opt/php/extensions/ \
+    && mkdir -p /opt/php/conf.d/ \
+    && mv /opt/elastic/apm-agent-php/* /opt/php/apm-agent-php/ \
+    && mv /opt/php/apm-agent-php/extensions/* /opt/php/extensions/ \
+    && rm -rf /opt/php/apm-agent-php/bin \
+    && rm -rf /opt/php/apm-agent-php/etc \
+    && rm -rf /opt/php/apm-agent-php/docs \
+    && rm -rf /opt/php/apm-agent-php/extensions \
+    && echo 'extension=/opt/php/extensions/elastic_apm_loader.so' > /opt/php/conf.d/elastic-apm.ini \
+    && echo "elastic_apm.bootstrap_php_part_file=/opt/php/apm-agent-php/src/bootstrap_php_part.php" >> /opt/php/conf.d/elastic-apm.ini
