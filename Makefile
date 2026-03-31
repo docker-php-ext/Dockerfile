@@ -34,16 +34,22 @@ build:
 		.
 
 run-single-test: build
-	@set -e; \
-	TEST_IMAGE=test-dockerphpext-local/$(extension)-$(php_version); \
+	@TEST_IMAGE=test-dockerphpext-local/$(extension)-$(php_version); \
 	echo "###############################################"; \
 	echo "### Testing $(extension) PHP $(php_version)"; \
 	echo "###"; \
 	docker run --rm \
-		-v $$(pwd)/tests/test.php:/opt/php/tests/test.php \
+		-v $$(pwd)/test.php:/opt/php/tests/test.php \
 		$$TEST_IMAGE \
-		php /opt/php/tests/test.php $(extension); \
-	if docker run --rm $$TEST_IMAGE php -m 2>&1 | grep -Eqi 'Unable|Warning'; then \
+		php /opt/php/tests/test.php $(extension) 2>&1; \
+	TEST_EXIT=$$?; \
+	if [ $$TEST_EXIT -ne 0 ]; then \
+		echo "❌ Test script failed"; \
+		exit $$TEST_EXIT; \
+	fi; \
+	docker run --rm $$TEST_IMAGE php -m 2>&1 | grep -Eqi 'Unable|Warning'; \
+	EXT_ERROR=$$?; \
+	if [ $$EXT_ERROR -eq 0 ]; then \
 		echo "❌ PHP extension load failed"; \
 		exit 1; \
 	fi; \
